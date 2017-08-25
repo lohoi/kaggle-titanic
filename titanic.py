@@ -1,78 +1,104 @@
 import pandas as pd
+import matplotlib.pyplot as plt
 from sklearn import linear_model as lm
 import numpy as np
 
 # ************************************************
-# * File Parsing Functions
+# * File Parsing
 # ************************************************
 def read_files():
     return pd.read_csv('train.csv',sep=','), pd.read_csv('test.csv',sep=',')
 
-def extract_title(name):
-    title = name.split(',')[1].split('.')[0].strip().lower()
-    if title == "miss" or title == "mme" or title == "mlle":
-        title = "Ms"
-    return title
-train_data, test_data = read_files();
+train, test = read_files();
 
 
-plot1 = train_data.pivot_table("PassengerId","Survived",aggfunc='count').plot(kind='bar')
-print(train_data["Survived"].value_counts()[0]/ (train_data["Survived"].value_counts()[0] + train_data["Survived"].value_counts()[1]))
+# ************************************************
+# * Analyze Data
+# ************************************************
+# ~ 61.6 % did not survive
+# print("training examples survived distribution: " + str(train["Survived"].value_counts()[0] / (train["Survived"].value_counts()[0] + train["Survived"].value_counts()[1])))
+
+# the lowest class (3) seems to be the least likely to survive
+# plt_economic_class = train.pivot_table(values="PassengerId",index="Pclass",columns="Survived",aggfunc="count").plot(kind="bar")
+
+# females were more likely to survive than males
+# plt_sex = train.pivot_table(values="PassengerId",index="Sex",columns="Survived",aggfunc="count").plot(kind="bar")
+
+# normally distributed with a mean of ~30
+# plt_age = train.pivot_table(values="PassengerId",index="Age",columns="Survived",aggfunc="count").plot(kind="bar")
+avg_age = train["Age"].mean()
+
+# majority of people did not have siblings, but the highest percentage of survivors had 1 sibling
+# plt_sib = train.pivot_table(values="PassengerId",index="SibSp",columns="Survived",aggfunc="count").plot(kind="bar")
+
+# majority of people embarked from Southhampton (S)
+# plt_embarked = train.pivot_table(values="PassengerId",index="Embarked",columns=None,aggfunc="count").plot(kind="bar")
+
+# for now, drop the cabin column for both
+# plt_embarked = train.pivot_table(values="PassengerId",index="Cabin",columns="Survived",aggfunc="count").plot(kind="bar")
+
+# parch and sibsip seem to be very heavily correlated
+# plt_parch = train.pivot_table(values="PassengerId",index="Parch",columns="Survived",aggfunc="count").plot(kind="bar")
+
+# plt_parch = train.pivot_table(values="PassengerId",index="Ticket",columns="Survived",aggfunc="count").plot(kind="bar")
+
+# plt.show()
+
+# ************************************************
+# * Missing Values
+# ************************************************
+# Age: 177
+# Cabin: 687
+# Embarked: 2
+# print(train.isnull().sum(axis=0))
+
+# Age: 86
+# Fare: 1
+# Cabin: 327
+# print(test.isnull().sum(axis=0))
+
+# ************************************************
+# * Feature Engineering
+# ************************************************
+train.drop("Cabin",axis=1,inplace=True)
+test.drop("Cabin",axis=1,inplace=True)
+train.drop("Ticket",axis=1,inplace=True)
+test.drop("Ticket",axis=1,inplace=True)
+train.drop("Name",axis=1,inplace=True)
+test.drop("Name",axis=1,inplace=True)
+
+# fill the age with the mean age
+train["Age"].fillna(value=avg_age,inplace=True)
+test["Age"].fillna(value=test["Age"].mean(),inplace=True)
+
+# replace with k-1 categorical variables
+train_sex = pd.get_dummies(data=train["Sex"],drop_first=True)
+test_sex = pd.get_dummies(data=test["Sex"],drop_first=True)
+train.drop("Sex",axis=1,inplace=True)
+test.drop("Sex",axis=1,inplace=True)
+train = pd.concat([train, train_sex],axis=1)
+test = pd.concat([test, test_sex],axis=1)
+
+train_embarked = pd.get_dummies(data=train["Embarked"],drop_first=True)
+test_embarked = pd.get_dummies(data=test["Embarked"],drop_first=True)
+train.drop("Embarked",axis=1,inplace=True)
+test.drop("Embarked",axis=1,inplace=True)
+train = pd.concat([train, train_embarked],axis=1)
+test = pd.concat([test, test_embarked],axis=1)
 
 
+test["Fare"].fillna(value=test["Fare"].mean(),inplace=True)
 
-train_data = train_data.drop(["Cabin","Embarked","Ticket"],axis=1)
-test_data = test_data.drop(["Cabin","Embarked","Ticket"],axis=1)
+train_y = train["Survived"]
+train.drop("Survived",axis=1,inplace=True)
 
-# one hot encode sex variable
-train_data = pd.concat([train_data, pd.get_dummies(train_data["Sex"])],axis=1)
-train_data = train_data.drop("Sex",axis=1)
+log_clf = lm.LogisticRegressionCV(Cs=10,cv=5,dual=False,penalty="l2",scoring="roc_auc",n_jobs=-1)
+log_clf.fit(train,train_y)
 
-# TODO impute age
-# TODO extract title from name
-# title_df = pd.DataFrame({"Title":train_data["Name"].apply(extract_title)})
-# # print(title_df["Title"].value_counts())
-# title_df = pd.get_dummies(title_df["Title"])
-train_data = train_data.drop("Name",axis=1)
-# train_data = pd.concat([train_data, title_df],axis=1)
+print(log_clf.scores_[1].mean(axis=0).max())
 
-# TODO simple mean imputation
-train_data["Age"].fillna(train_data["Age"].mean(),inplace=True)
+prediction = log_clf.predict(test)
+output = pd.concat([test["PassengerId"], pd.DataFrame(prediction)] ,axis=1)
 
+np.savetxt("simple_output.csv", output, delimiter=",",fmt='%i',header="PassengerId,Survived")
 
-# train_data = pd.concat([train_data, pd.get_dummies(title_df["Title"])],axis=1)
-# train_data.drop("Name",axis=1)
-
-test_data["Age"].fillna(test_data["Age"].mean(),inplace=True)
-test_data["Fare"].fillna(test_data["Fare"].mean(),inplace=True)
-
-
-train_y = train_data["Survived"]
-train_data = train_data.drop("Survived",axis=1)
-train_X = train_data.as_matrix()
-
-clf = lm.LogisticRegressionCV(Cs=1,cv=5,penalty="l2",n_jobs=-1)
-clf.fit(train_data,train_y)
-
-print(clf.scores_[1].mean(axis=0).max())
-
-sex_mat = test_data["Sex"]
-test_data = test_data.drop("Sex",axis=1)
-test_data = pd.concat([test_data, pd.get_dummies(sex_mat)],axis=1).fillna(0)
-
-# extract title from name
-# title_df = pd.DataFrame({"Title":test_data["Name"].apply(extract_title)})
-test_data = test_data.drop("Name",axis=1)
-# print(title_df["Title"].value_counts())
-# title_df = pd.get_dummies(title_df["Title"])
-# test_data = pd.concat([test_data, title_df],axis=1)
-# padding = pd.DataFrame(np.zeros((418,6)))
-# test_data = pd.concat([test_data, padding],axis=1)
-# padding.info()
-# train_data.info()
-# test_data = pd.concat([ test_data, padding],axis=1)
-
-
-result = pd.concat([test_data["PassengerId"],pd.DataFrame(clf.predict(test_data))],axis=1).values
-
-np.savetxt("simple_output.csv", result, delimiter=",",fmt='%i',header="PassengerId,Survived")

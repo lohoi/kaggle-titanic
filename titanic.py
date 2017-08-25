@@ -15,6 +15,12 @@ def extract_title(name):
     return title
 train_data, test_data = read_files();
 
+
+plot1 = train_data.pivot_table("PassengerId","Survived",aggfunc='count').plot(kind='bar')
+print(train_data["Survived"].value_counts()[0]/ (train_data["Survived"].value_counts()[0] + train_data["Survived"].value_counts()[1]))
+
+
+
 train_data = train_data.drop(["Cabin","Embarked","Ticket"],axis=1)
 test_data = test_data.drop(["Cabin","Embarked","Ticket"],axis=1)
 
@@ -47,6 +53,8 @@ train_X = train_data.as_matrix()
 
 clf = lm.LogisticRegressionCV(Cs=1,cv=5,penalty="l2",n_jobs=-1)
 clf.fit(train_data,train_y)
+
+print(clf.scores_[1].mean(axis=0).max())
 
 sex_mat = test_data["Sex"]
 test_data = test_data.drop("Sex",axis=1)

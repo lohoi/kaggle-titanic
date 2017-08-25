@@ -64,10 +64,12 @@ train.drop("Cabin",axis=1,inplace=True)
 test.drop("Cabin",axis=1,inplace=True)
 train.drop("Ticket",axis=1,inplace=True)
 test.drop("Ticket",axis=1,inplace=True)
+# TODO - See what can be done with the title?
 train.drop("Name",axis=1,inplace=True)
 test.drop("Name",axis=1,inplace=True)
 
 # fill the age with the mean age
+# TODO - I can make this better by running a regression or MICE
 train["Age"].fillna(value=avg_age,inplace=True)
 test["Age"].fillna(value=test["Age"].mean(),inplace=True)
 
